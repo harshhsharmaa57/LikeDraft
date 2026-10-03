@@ -1,7 +1,6 @@
 CREATE TABLE IF NOT EXISTS posts (
     id BIGSERIAL PRIMARY KEY,
-    title TEXT NOT NULL,
-    like_count BIGINT NOT NULL DEFAULT 0
+    title TEXT NOT NULL
 );
 
 INSERT INTO posts (title)
