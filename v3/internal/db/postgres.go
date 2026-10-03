@@ -15,6 +15,9 @@ func Connect(ctx context.Context) (*pgxpool.Pool, error) {
 		return nil, fmt.Errorf("parse postgres config: %w", err)
 	}
 
+	config.MaxConns = 20
+	config.MinConns = 5
+
 	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
 		return nil, fmt.Errorf("create postgres pool: %w", err)
@@ -22,7 +25,7 @@ func Connect(ctx context.Context) (*pgxpool.Pool, error) {
 
 	if err := pool.Ping(ctx); err != nil {
 		pool.Close()
-		return nil, fmt.Errorf("ping postgres: %w", err)
+		return nil, fmt.Errorf("postgres ping failed: %w", err)
 	}
 
 	return pool, nil
