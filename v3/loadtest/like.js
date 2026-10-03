@@ -6,7 +6,7 @@ export const options = {
         likes: {
             executor: 'constant-arrival-rate',
 
-            rate: 7500,
+            rate: 10000,
 
             timeUnit: '1s',
 
