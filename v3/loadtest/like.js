@@ -6,26 +6,37 @@ export const options = {
         likes: {
             executor: 'constant-arrival-rate',
 
-            // Number of requests per second.
-            rate: 7500,
+            rate: 5000,
 
             timeUnit: '1s',
 
-            // Run for 30 seconds.
             duration: '30s',
 
-            // Initial virtual users.
             preAllocatedVUs: 100,
 
-            // Maximum VUs k6 can create.
             maxVUs: 1000,
         },
     },
 };
 
 export default function () {
+    // Deterministic synthetic user identity.
+    //
+    // __VU identifies the virtual user.
+    // __ITER identifies the iteration performed by that VU.
+    //
+    // Together they give us a deterministic user identifier
+    // for this benchmark.
+    const userID = `user-${__VU}-${__ITER}`;
+
     const response = http.post(
-        'http://localhost:8080/posts/1/like'
+        'http://localhost:8080/posts/1/like',
+        null,
+        {
+            headers: {
+                'X-User-ID': userID,
+            },
+        }
     );
 
     check(response, {
