@@ -6,9 +6,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"like-counter/internal/db"
-	"like-counter/internal/handler"
-	redisclient "like-counter/internal/redis"
+	db "github.com/harshhsharmaa57/LikeDraft/v3/internal/db"
+	handler "github.com/harshhsharmaa57/LikeDraft/v3/internal/handler"
+	redisclient "github.com/harshhsharmaa57/LikeDraft/v3/internal/redis"
 )
 
 func main() {

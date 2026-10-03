@@ -150,9 +150,9 @@ func (h *Handler) GetPost(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"post_id":     postID,
-		"shard":       shard,
-		"shard_count": count,
+		"post_id":    postID,
+		"title":      title,
+		"like_count": totalLikes,
 	})
 }
 
