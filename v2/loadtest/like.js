@@ -7,7 +7,7 @@ export const options = {
             executor: 'constant-arrival-rate',
 
             // Number of requests per second.
-            rate: 10000,
+            rate: 7500,
 
             timeUnit: '1s',
 
