@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/harshhsharmaa57/like-counter/internal/db"
+	"github.com/harshhsharmaa57/LikeDraft/v1/internal/db"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -59,7 +59,6 @@ func (s *Server) likePost(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
-
 
 func (s *Server) getPost(w http.ResponseWriter, r *http.Request) {
 	postIDStr := r.PathValue("id")

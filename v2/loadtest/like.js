@@ -6,14 +6,18 @@ export const options = {
         likes: {
             executor: 'constant-arrival-rate',
 
-            rate: 100,
+            // Number of requests per second.
+            rate: 1000,
 
             timeUnit: '1s',
 
+            // Run for 30 seconds.
             duration: '30s',
 
+            // Initial virtual users.
             preAllocatedVUs: 100,
 
+            // Maximum VUs k6 can create.
             maxVUs: 1000,
         },
     },
@@ -25,6 +29,6 @@ export default function () {
     );
 
     check(response, {
-        'status is 200': (r) => r.status === 200,
+        'status is 200': (response) => response.status === 200,
     });
 }

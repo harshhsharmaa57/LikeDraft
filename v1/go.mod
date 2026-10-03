@@ -1,4 +1,4 @@
-module github.com/harshhsharmaa57/like-counter
+module github.com/harshhsharmaa57/LikeDraft/v1
 
 go 1.26.6
 
