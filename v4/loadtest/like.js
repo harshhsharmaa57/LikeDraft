@@ -6,7 +6,7 @@ export const options = {
         likes: {
             executor: 'constant-arrival-rate',
 
-            rate: 10000,
+            rate: 5000,
 
             timeUnit: '1s',
 
@@ -20,13 +20,6 @@ export const options = {
 };
 
 export default function () {
-    // Deterministic synthetic user identity.
-    //
-    // __VU identifies the virtual user.
-    // __ITER identifies the iteration performed by that VU.
-    //
-    // Together they give us a deterministic user identifier
-    // for this benchmark.
     const userID = `user-${__VU}-${__ITER}`;
 
     const response = http.post(
