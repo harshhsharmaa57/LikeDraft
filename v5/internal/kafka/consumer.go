@@ -160,4 +160,3 @@ func shardForUser(userID string) int {
 
 	return int(hash % NumShards)
 }
-
