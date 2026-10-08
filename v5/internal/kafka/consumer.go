@@ -6,11 +6,9 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/harshhsharmaa57/LikeDraft/v5/internal/events"
 	"github.com/redis/go-redis/v9"
-	"github.com/twmb/franz-go"
 	"github.com/twmb/franz-go/pkg/kgo"
-
-	"like-counter/internal/events"
 )
 
 const (
@@ -163,4 +161,3 @@ func shardForUser(userID string) int {
 	return int(hash % NumShards)
 }
 
-var _ franz.Fetches = (*kgo.Fetches)(nil)
