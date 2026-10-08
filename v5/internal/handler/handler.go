@@ -3,78 +3,45 @@ package handler
 import (
 	"context"
 	"fmt"
-	"hash/fnv"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
+
+	"like-counter/internal/events"
+	kafkapkg "like-counter/internal/kafka"
 )
 
 const NumShards = 32
 
 type Handler struct {
-	db    *pgxpool.Pool
-	redis *redis.Client
+	db       *pgxpool.Pool
+	redis    *redis.Client
+	producer *kafkapkg.Producer
 }
 
-func New(db *pgxpool.Pool, redisClient *redis.Client) *Handler {
+func New(
+	db *pgxpool.Pool,
+	redisClient *redis.Client,
+	producer *kafkapkg.Producer,
+) *Handler {
 	return &Handler{
-		db:    db,
-		redis: redisClient,
+		db:       db,
+		redis:    redisClient,
+		producer: producer,
 	}
 }
 
-func shardForUser(userID string) int {
-	hash := fnv.New32a()
-
-	_, _ = hash.Write([]byte(userID))
-
-	return int(hash.Sum32() % NumShards)
-}
-
-func counterKey(postID int64, shard int) string {
-	return fmt.Sprintf("post:%d:likes:%d", postID, shard)
-}
-
-func userLikeKey(postID int64, shard int, userID string) string {
-	return fmt.Sprintf(
-		"post:%d:likes:%d:users:%s",
-		postID,
-		shard,
-		userID,
-	)
-}
-
-// Atomic operation:
-//
-// 1. Check whether this user already liked the post.
-// 2. If not, record the like.
-// 3. Increment the shard counter.
-// 4. Return whether this request created a new like.
-//
-// Lua executes atomically inside Redis.
-var likeScript = redis.NewScript(`
-local created = redis.call("SETNX", KEYS[1], "1")
-
-if created == 1 then
-    local count = redis.call("INCR", KEYS[2])
-    return {1, count}
-end
-
-local current = redis.call("GET", KEYS[2])
-
-if not current then
-    current = "0"
-end
-
-return {0, current}
-`)
-
-// POST /posts/:id/like
 func (h *Handler) Like(c *gin.Context) {
-	postID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	postID, err := strconv.ParseInt(
+		c.Param("id"),
+		10,
+		64,
+	)
+
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "invalid post id",
@@ -91,79 +58,39 @@ func (h *Handler) Like(c *gin.Context) {
 		return
 	}
 
-	shard := shardForUser(userID)
+	event := events.LikeEvent{
+		EventID:   newEventID(),
+		EventType: events.LikeCreated,
+		UserID:    userID,
+		PostID:    postID,
+		CreatedAt: time.Now().UTC(),
+	}
 
-	stateKey := userLikeKey(postID, shard, userID)
-	counterKey := counterKey(postID, shard)
-
-	result, err := likeScript.Run(
+	if err := h.producer.PublishLike(
 		c.Request.Context(),
-		h.redis,
-		[]string{
-			stateKey,
-			counterKey,
-		},
-	).Result()
-
-	if err != nil {
+		event,
+	); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "failed to process like",
+			"error": "failed to publish like event",
 		})
 		return
 	}
 
-	values, ok := result.([]interface{})
-	if !ok || len(values) != 2 {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "invalid redis response",
-		})
-		return
-	}
-
-	created, err := redisInt64(values[0])
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "invalid like state response",
-		})
-		return
-	}
-
-	shardCount, err := redisInt64(values[1])
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "invalid counter response",
-		})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"post_id":      postID,
-		"user_id":      userID,
-		"shard":        shard,
-		"created":      created == 1,
-		"shard_count":  shardCount,
+	c.JSON(http.StatusAccepted, gin.H{
+		"accepted": true,
+		"event_id": event.EventID,
+		"post_id":  postID,
+		"user_id":  userID,
 	})
 }
 
-func redisInt64(value interface{}) (int64, error) {
-	switch v := value.(type) {
-	case int64:
-		return v, nil
-
-	case string:
-		return strconv.ParseInt(v, 10, 64)
-
-	case []byte:
-		return strconv.ParseInt(string(v), 10, 64)
-
-	default:
-		return 0, fmt.Errorf("unsupported redis value type %T", value)
-	}
-}
-
-// GET /posts/:id
 func (h *Handler) GetPost(c *gin.Context) {
-	postID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	postID, err := strconv.ParseInt(
+		c.Param("id"),
+		10,
+		64,
+	)
+
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "invalid post id",
@@ -171,12 +98,10 @@ func (h *Handler) GetPost(c *gin.Context) {
 		return
 	}
 
-	ctx := c.Request.Context()
-
 	var title string
 
 	err = h.db.QueryRow(
-		ctx,
+		c.Request.Context(),
 		"SELECT title FROM posts WHERE id = $1",
 		postID,
 	).Scan(&title)
@@ -188,13 +113,24 @@ func (h *Handler) GetPost(c *gin.Context) {
 		return
 	}
 
-	keys := make([]string, NumShards)
+	keys := make([]string, 0, NumShards)
 
 	for shard := 0; shard < NumShards; shard++ {
-		keys[shard] = counterKey(postID, shard)
+		keys = append(
+			keys,
+			fmt.Sprintf(
+				"post:%d:likes:%d",
+				postID,
+				shard,
+			),
+		)
 	}
 
-	values, err := h.redis.MGet(ctx, keys...).Result()
+	values, err := h.redis.MGet(
+		c.Request.Context(),
+		keys...,
+	).Result()
+
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "failed to read like counters",
@@ -202,40 +138,38 @@ func (h *Handler) GetPost(c *gin.Context) {
 		return
 	}
 
-	var totalLikes int64
+	var total int64
 
 	for _, value := range values {
-		if value == nil {
-			continue
-		}
+		switch v := value.(type) {
+		case string:
+			n, err := strconv.ParseInt(v, 10, 64)
+			if err == nil {
+				total += n
+			}
 
-		count, err := redisInt64(value)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "invalid counter value",
-			})
-			return
-		}
+		case nil:
+			// Missing shard means zero.
 
-		totalLikes += count
+		default:
+			_ = v
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"id":         postID,
+		"like_count": total,
 		"title":      title,
-		"like_count": totalLikes,
 	})
 }
 
-// DELETE /posts/:id/likes
-//
-// Benchmark/reset endpoint.
-// It removes all 32 counter keys and all user-like state keys
-// belonging to the post.
-//
-// This endpoint is for experimentation, not normal production use.
 func (h *Handler) ResetLikes(c *gin.Context) {
-	postID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	postID, err := strconv.ParseInt(
+		c.Param("id"),
+		10,
+		64,
+	)
+
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "invalid post id",
@@ -243,14 +177,18 @@ func (h *Handler) ResetLikes(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	for shard := 0; shard < NumShards; shard++ {
-		counter := counterKey(postID, shard)
+		counterKey := fmt.Sprintf(
+			"post:%d:likes:%d",
+			postID,
+			shard,
+		)
 
-		if err := h.redis.Del(ctx, counter).Err(); err != nil {
+		if err := h.redis.Del(ctx, counterKey).Err(); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "failed to reset counter",
+				"error": "failed to delete counter",
 			})
 			return
 		}
@@ -279,7 +217,10 @@ func (h *Handler) ResetLikes(c *gin.Context) {
 			}
 
 			if len(keys) > 0 {
-				if err := h.redis.Del(ctx, keys...).Err(); err != nil {
+				if err := h.redis.Del(
+					ctx,
+					keys...,
+				).Err(); err != nil {
 					c.JSON(http.StatusInternalServerError, gin.H{
 						"error": "failed to delete like state",
 					})
@@ -296,7 +237,17 @@ func (h *Handler) ResetLikes(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"post_id":    postID,
 		"like_count": 0,
+		"post_id":    postID,
 	})
 }
+
+func newEventID() string {
+	return fmt.Sprintf(
+		"%d-%d",
+		time.Now().UnixNano(),
+		time.Now().UnixNano(),
+	)
+}
+
+func _contextUsed(_ context.Context) {}
