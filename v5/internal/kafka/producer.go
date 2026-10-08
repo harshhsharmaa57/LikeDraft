@@ -5,9 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/harshhsharmaa57/LikeDraft/v5/internal/events"
 	"github.com/twmb/franz-go/pkg/kgo"
-
-	"like-counter/internal/events"
 )
 
 const LikesTopic = "likes"
@@ -46,9 +45,9 @@ func (p *Producer) PublishLike(
 		Value: data,
 	}
 
-	result := p.client.ProduceSync(ctx, record)
+	results := p.client.ProduceSync(ctx, record)
 
-	if err := result.Err(); err != nil {
+	if err := results.FirstErr(); err != nil {
 		return fmt.Errorf("publish like event: %w", err)
 	}
 
