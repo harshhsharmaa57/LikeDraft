@@ -7,8 +7,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"like-counter/internal/kafka"
-	redisclient "like-counter/internal/redis"
+	"github.com/harshhsharmaa57/LikeDraft/v5/internal/kafka"
+	redisclient "github.com/harshhsharmaa57/LikeDraft/v5/internal/redis"
 )
 
 func main() {
