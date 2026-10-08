@@ -8,11 +8,10 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/harshhsharmaa57/LikeDraft/v5/internal/events"
+	kafkapkg "github.com/harshhsharmaa57/LikeDraft/v5/internal/kafka"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
-
-	"like-counter/internal/events"
-	kafkapkg "like-counter/internal/kafka"
 )
 
 const NumShards = 32
