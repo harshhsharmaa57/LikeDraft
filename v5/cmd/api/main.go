@@ -5,11 +5,10 @@ import (
 	"log"
 
 	"github.com/gin-gonic/gin"
-
-	"like-counter/internal/db"
-	"like-counter/internal/handler"
-	kafkapkg "like-counter/internal/kafka"
-	redisclient "like-counter/internal/redis"
+	"github.com/harshhsharmaa57/LikeDraft/v5/internal/db"
+	"github.com/harshhsharmaa57/LikeDraft/v5/internal/handler"
+	kafkapkg "github.com/harshhsharmaa57/LikeDraft/v5/internal/kafka"
+	redisclient "github.com/harshhsharmaa57/LikeDraft/v5/internal/redis"
 )
 
 func main() {
