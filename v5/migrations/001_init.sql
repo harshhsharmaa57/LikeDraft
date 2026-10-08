@@ -1,0 +1,8 @@
+CREATE TABLE IF NOT EXISTS posts (
+    id BIGSERIAL PRIMARY KEY,
+    title TEXT NOT NULL
+);
+
+INSERT INTO posts (title)
+VALUES ('My first post')
+ON CONFLICT DO NOTHING;
