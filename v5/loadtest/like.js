@@ -5,7 +5,7 @@ export const options = {
     scenarios: {
         likes: {
             executor: 'constant-arrival-rate',
-            rate: 1000,
+            rate: 10000,
             timeUnit: '1s',
             duration: '30s',
             preAllocatedVUs: 100,
